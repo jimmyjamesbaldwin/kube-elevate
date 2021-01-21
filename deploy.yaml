@@ -1,0 +1,56 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-elevate
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-elevate
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: kube-elevate
+    namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: op
+spec:
+  selector:
+    matchLabels:
+      app: op
+  template:
+    metadata:
+      labels:
+        app: op
+    spec:
+      serviceAccountName: kube-elevate
+      containers:
+      - image: docker.io/jimmyjamesbaldwin/op-db:3
+        name: op
+        imagePullPolicy: Always
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: elevatepermissions.jbaldwin.org
+spec:
+  scope: Namespaced
+  group: jbaldwin.org
+  versions:
+    - name: v1
+      served: true
+      storage: true
+  names:
+    kind: ElevatePermission
+    plural: elevatepermissions
+    singular: elevatepermission
+    shortNames:
+      - eps
+       #https://github.com/nolar/ephemeral-volume-claims/blob/prototype/pod.yaml

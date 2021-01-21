@@ -1,0 +1,66 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: hello
+spec:
+  schedule: "*/1 * * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: db-operator
+          containers:
+          - name: hello
+            image: bitnami/kubectl
+            imagePullPolicy: Always
+            command: ["/bin/bash", "-c"]
+            args:
+            - |
+                #!/bin/bash
+                for NS in $(kubectl get namespaces -o name | cut -f 2 -d "/") ; do for NAME in $(kubectl --namespace=$NS get rolebindings -o name)
+                do
+                  exp=$( kubectl get --namespace $NS $NAME -o jsonpath={.metadata.annotations."expirytime"} 2> /dev/null) && \
+                  if [ -z "$exp" ]
+                  then
+                    continue
+                  fi
+                  echo $exp && \
+                  echo $(date +%s) && \
+                  if [ $exp -le $(date +%s) ]
+                  then
+                    echo "Deleting expired rolebindings $NAME in $NS"
+                    kubectl delete $NAME -n $NS
+                  fi
+                  done
+                done
+          restartPolicy: OnFailure
+#https://stackoverflow.com/questions/54904069/how-to-schedule-a-cronjob-which-executes-a-kubectl-command/54908449#54908449
+#https://stackoverflow.com/questions/34666031/kubernetes-endpoints-with-ttl
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: delete-evobjects
+spec:
+  schedule: "*/1 * * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: db-operator
+          containers:
+          - name: delete-evobjects
+            image: bitnami/kubectl
+            imagePullPolicy: Always
+            command: ["/bin/bash", "-c"]
+            args:
+            - |
+                #!/bin/bash
+                echo Cleaning up ElevatePermission objects >24 hours old
+                kubectl get elevatepermission -o go-template --template '{{range .items}}{{.metadata.name}} {{.metadata.creationTimestamp}}{{"\n"}}{{end}}' | \
+                awk '$2 <= "'$(date -d'now-2 minutes' -Ins --utc | sed 's/+0000/Z/')'" { print $1 }' | xargs --no-run-if-empty kubectl delete elevatepermission
+          restartPolicy: OnFailure
