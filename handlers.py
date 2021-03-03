@@ -4,6 +4,7 @@ import yaml
 import os
 import requests
 import json
+import time
 from datetime import datetime, timedelta
 from kubernetes.client.rest import ApiException
 
@@ -15,29 +16,22 @@ from kubernetes.client.rest import ApiException
 
 @kopf.on.create('jbaldwin.org', 'v1', 'elevatepermissions')
 def create_fn(meta, spec, namespace, logger, body, **kwargs):
-    name = meta.get('name')
-
     name = body['metadata']['name']
     namespace = body['metadata']['namespace']
-
-    path = os.path.join(os.path.dirname(__file__), 'cronjob.yaml')
-    tmpl = open(path, 'rt').read()
-    text = tmpl.format(name=name)
-    data = yaml.safe_load(text)
 
     # check if servicenow has an open incident for this - this needs testing!
     # https://gallery.technet.microsoft.com/scriptcenter/Get-all-open-ServiceNow-16142d9a
     servicenow_url = "https://myservicenow.ruffer.local/"
     servicenow_inc = "INC1234567"
     get_servicenow_incident_url = servicenow_url + "/api/now/v1/table/incident?sysparm_query=number=" + servicenow_inc
-    get_servicenow_incident_response = requests.get(get_servicenow_incident_url, auth=('myusername', 'mybasicpass'))
-    if get_servicenow_incident_response.status_code != 200:
-        logger.error("Failed to retrieve ServiceNow Inc")
-        exit
+    #get_servicenow_incident_response = requests.get(get_servicenow_incident_url, auth=('myusername', 'mybasicpass'))
+    #if get_servicenow_incident_response.status_code != 200:
+    #    logger.error("Failed to retrieve ServiceNow Inc")
+    #    exit
     
-    json_data = json.loads(get_servicenow_incident_response.json())
-    if json_data['active'] != "true":
-        logger.error()
+    #json_data = json.loads(get_servicenow_incident_response.json())
+    #if json_data['active'] != "true":
+    #    logger.error()
     #https://stackoverflow.com/questions/35283649/error-in-creating-an-incident-in-servicenow
 
 
@@ -62,14 +56,17 @@ def create_fn(meta, spec, namespace, logger, body, **kwargs):
     path = os.path.join(os.path.dirname(__file__), '/templates/rolebinding.yaml')
     tmpl = open(path, 'rt').read()
     now=int(datetime.timestamp(datetime.now()))
-    expiry=int(datetime.timestamp(datetime.now() + timedelta(hours=3)))
-    rb_name = "jbaldwin-rb-readwrite-" + str(now)
-    text = tmpl.format(user="jbaldwin", expirytime=expiry, rolebindingname=rb_name)
+    expiry=int(datetime.timestamp(datetime.now() + timedelta(hours=body['spec']['lease-hours'])))
+    incident_ticket=body['spec']['incident-ticket']
+    rb_name = "kube-elevate-rb-readwrite-" + body['spec']['incident-ticket'] + "-" + str(int(time.time()))
+    text = tmpl.format(user=body['spec']['username'], 
+                       namespace=body['spec']['username'], 
+                       expirytime=expiry, 
+                       rolebindingname=rb_name)
     rb = yaml.safe_load(text)
     kopf.adopt(rb, owner=body)
     roleBinding = batch_api.create_namespaced_role_binding(body=rb, namespace=namespace)
-    
-    return {'message': 'test'}
+    return {'message': 'Rolebinding created'}
 
 @kopf.on.delete('jbaldwin.org', 'v1', 'elevatepermissions')
 def delete(body, **kwargs):

@@ -11,4 +11,4 @@ roleRef:
 subjects:
 - kind: User
   name: "{user}"
-  namespace: default
+  namespace: "{namespace}"

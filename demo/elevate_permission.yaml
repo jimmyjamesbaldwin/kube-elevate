@@ -1,0 +1,9 @@
+apiVersion: jbaldwin.org/v1
+kind: ElevatePermission
+metadata:
+  name: my-claim-5
+  namespace: default
+spec:
+  incident-ticket: INC123456789
+  lease-hours: 1
+  username: jbaldwin

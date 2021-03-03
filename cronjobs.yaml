@@ -1,38 +1,41 @@
 apiVersion: batch/v1beta1
 kind: CronJob
 metadata:
-  name: hello
+  name: delete-expired-rolebindings
+  namespace: kube-elevate
 spec:
   schedule: "*/1 * * * *"
-  successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       template:
         spec:
-          serviceAccountName: db-operator
+          serviceAccountName: kube-elevate
           containers:
-          - name: hello
+          - name: delete-expired-rolebindings
             image: bitnami/kubectl
             imagePullPolicy: Always
             command: ["/bin/bash", "-c"]
             args:
             - |
                 #!/bin/bash
-                for NS in $(kubectl get namespaces -o name | cut -f 2 -d "/") ; do for NAME in $(kubectl --namespace=$NS get rolebindings -o name)
-                do
-                  exp=$( kubectl get --namespace $NS $NAME -o jsonpath={.metadata.annotations."expirytime"} 2> /dev/null) && \
-                  if [ -z "$exp" ]
-                  then
-                    continue
-                  fi
-                  echo $exp && \
-                  echo $(date +%s) && \
-                  if [ $exp -le $(date +%s) ]
-                  then
-                    echo "Deleting expired rolebindings $NAME in $NS"
-                    kubectl delete $NAME -n $NS
-                  fi
+                for NS in $(kubectl get namespaces -o name | cut -f 2 -d "/")
+                do 
+                  for NAME in $(kubectl --namespace=$NS get rolebindings -o name)
+                  do
+                    exp=$( kubectl get --namespace $NS $NAME -o jsonpath={.metadata.annotations."expirytime"} 2> /dev/null) && \
+                    if [ -z "$exp" ]
+                    then
+                      continue
+                    fi
+                    echo $exp && \
+                    echo $(date +%s) && \
+                    if [ $exp -le $(date +%s) ]
+                    then
+                      echo "Deleting expired rolebindings $NAME in $NS"
+                      kubectl delete $NAME -n $NS
+                    fi
                   done
                 done
           restartPolicy: OnFailure
@@ -42,25 +45,26 @@ spec:
 apiVersion: batch/v1beta1
 kind: CronJob
 metadata:
-  name: delete-evobjects
+  name: delete-expired-elevatepermissionobjects
+  namespace: kube-elevate
 spec:
   schedule: "*/1 * * * *"
-  successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       template:
         spec:
-          serviceAccountName: db-operator
+          serviceAccountName: kube-elevate
           containers:
-          - name: delete-evobjects
+          - name: delete-expired-elevatepermissionobjects
             image: bitnami/kubectl
             imagePullPolicy: Always
             command: ["/bin/bash", "-c"]
             args:
             - |
                 #!/bin/bash
-                echo Cleaning up ElevatePermission objects >24 hours old
+                echo Cleaning up ElevatePermission objects >48 hours old
                 kubectl get elevatepermission -o go-template --template '{{range .items}}{{.metadata.name}} {{.metadata.creationTimestamp}}{{"\n"}}{{end}}' | \
                 awk '$2 <= "'$(date -d'now-2 minutes' -Ins --utc | sed 's/+0000/Z/')'" { print $1 }' | xargs --no-run-if-empty kubectl delete elevatepermission
           restartPolicy: OnFailure

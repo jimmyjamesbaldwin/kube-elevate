@@ -1,13 +1,20 @@
 ---
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-elevate
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: kube-elevate
+  namespace: kube-elevate
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: kube-elevate
+  namespace: kube-elevate
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -15,12 +22,13 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: kube-elevate
-    namespace: default
+    namespace: kube-elevate
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: op
+  namespace: kube-elevate
 spec:
   selector:
     matchLabels:
@@ -32,7 +40,7 @@ spec:
     spec:
       serviceAccountName: kube-elevate
       containers:
-      - image: docker.io/jimmyjamesbaldwin/op-db:3
+      - image: docker.io/jimmyjamesbaldwin/op-db:15
         name: op
         imagePullPolicy: Always
 ---
