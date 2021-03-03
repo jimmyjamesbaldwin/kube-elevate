@@ -60,7 +60,7 @@ def create_fn(meta, spec, namespace, logger, body, **kwargs):
     incident_ticket=body['spec']['incident-ticket']
     rb_name = "kube-elevate-rb-readwrite-" + body['spec']['incident-ticket'] + "-" + str(int(time.time()))
     text = tmpl.format(user=body['spec']['username'], 
-                       namespace=body['spec']['username'], 
+                       namespace=body['spec']['namespace'], 
                        expirytime=expiry, 
                        rolebindingname=rb_name)
     rb = yaml.safe_load(text)
